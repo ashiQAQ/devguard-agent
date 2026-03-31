@@ -1,0 +1,146 @@
+{
+  "_comment": "DevGuard Agent — 仓库与需求配置文件",
+  "_version": "1.0",
+  "_doc": "将此文件放在项目根目录，或通过 DEVGUARD_CONFIG 环境变量指定路径",
+
+  "repos": [
+    {
+      "id": "apollo-main",
+      "name": "Apollo 自动驾驶主仓库",
+      "enabled": true,
+
+      "git": {
+        "url": "https://github.com/ApolloAuto/apollo.git",
+        "branch": "master",
+        "token": "${GITHUB_TOKEN}",
+        "localPath": "/tmp/devguard/repos/apollo",
+        "depth": 1
+      },
+
+      "scan": {
+        "language": "cpp",
+        "includePaths": [
+          "modules/perception",
+          "modules/planning",
+          "modules/control",
+          "modules/localization",
+          "modules/prediction",
+          "modules/canbus",
+          "modules/map",
+          "modules/routing"
+        ],
+        "excludePaths": [
+          "third_party",
+          "build",
+          ".cache",
+          "docs",
+          "tools"
+        ],
+        "fileExtensions": [".cc", ".cpp", ".h", ".hpp", ".py"],
+        "maxFileSizeKB": 500,
+        "maxFiles": 2000
+      },
+
+      "baseline": {
+        "autoGenerate": true,
+        "updateOnMerge": true,
+        "snapshotDir": "./data/baselines/apollo",
+        "diffThreshold": 0.15
+      },
+
+      "requirements": {
+        "watchDirs": [
+          "./demands",
+          "./requirements",
+          "./docs/requirements"
+        ],
+        "formats": ["md", "txt", "pdf", "docx", "json", "yaml"],
+        "autoAnalyze": true
+      }
+    },
+
+    {
+      "id": "arm-recorder",
+      "name": "ARM数据落盘模块",
+      "enabled": true,
+
+      "git": {
+        "url": "local",
+        "localPath": "/Users/fengxinfeng/.qclaw/workspace/devguard-agent/demo/arm_recorder",
+        "branch": "main",
+        "token": null
+      },
+
+      "scan": {
+        "language": "cpp",
+        "includePaths": ["src", "include", "test"],
+        "excludePaths": ["build", ".cache"],
+        "fileExtensions": [".cc", ".cpp", ".h", ".hpp"],
+        "maxFileSizeKB": 200,
+        "maxFiles": 100
+      },
+
+      "baseline": {
+        "autoGenerate": true,
+        "updateOnMerge": false,
+        "snapshotDir": "./data/baselines/arm-recorder",
+        "diffThreshold": 0.1
+      },
+
+      "requirements": {
+        "watchDirs": [
+          "/Users/fengxinfeng/.qclaw/workspace/devguard-agent/demo/arm_recorder/docs"
+        ],
+        "formats": ["md", "txt"],
+        "autoAnalyze": true
+      }
+    }
+  ],
+
+  "analysis": {
+    "featureExtraction": {
+      "minConfidence": 0.6,
+      "maxFeaturesPerFile": 20,
+      "patterns": {
+        "cpp": {
+          "classPattern": "^class\\s+(\\w+)",
+          "funcPattern": "^\\s*(\\w[\\w:*&<>]+)\\s+(\\w+)\\s*\\(",
+          "modulePattern": "namespace\\s+(\\w+)",
+          "topicPattern": "TOPIC|topic_name|channel_name|/apollo/"
+        },
+        "python": {
+          "classPattern": "^class\\s+(\\w+)",
+          "funcPattern": "^def\\s+(\\w+)\\s*\\(",
+          "modulePattern": "^# Module:|^## "
+        }
+      }
+    },
+
+    "requirementParsing": {
+      "sectionMarkers": ["##", "###", "功能", "需求", "Feature", "Requirement", "US-", "FR-", "TC-"],
+      "featureKeywords": ["支持", "实现", "新增", "修改", "删除", "优化", "增加", "提供", "允许", "禁止"],
+      "priorityKeywords": {
+        "high": ["必须", "must", "shall", "关键", "阻断", "P0"],
+        "medium": ["应该", "should", "建议", "P1"],
+        "low": ["可以", "could", "可选", "P2"]
+      }
+    },
+
+    "alignment": {
+      "matchThreshold": 0.5,
+      "semanticWeight": 0.6,
+      "keywordWeight": 0.4,
+      "showUnmatchedFeatures": true,
+      "showNewFeatures": true,
+      "showModifiedFeatures": true,
+      "showRemovedFeatures": true
+    }
+  },
+
+  "output": {
+    "reportDir": "./data/reports",
+    "formats": ["markdown", "json"],
+    "includeTimestamp": true,
+    "openAfterGenerate": false
+  }
+}

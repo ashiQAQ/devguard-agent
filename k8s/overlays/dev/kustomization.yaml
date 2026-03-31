@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: devguard
+
+namePrefix: dev-
+
+resources:
+  - ../base
+
+patchesStrategicMerge:
+  - api-replicas.yaml
+  - cpp-replicas.yaml
+  - resource-limits.yaml
+
+configMapGenerator:
+  - name: devguard-config
+    behavior: merge
+    literals:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+
+replicas:
+  - name: devguard-api
+    count: 1
+  - name: devguard-cpp-engine
+    count: 1
+  - name: devguard-frontend
+    count: 1

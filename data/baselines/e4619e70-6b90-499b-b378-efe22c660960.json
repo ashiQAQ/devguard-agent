@@ -1,0 +1,657 @@
+{
+  "id": "e4619e70-6b90-499b-b378-efe22c660960",
+  "name": "Apollo自动驾驶系统基线",
+  "version": "1.0.0",
+  "language": "cpp",
+  "createdAt": "2026-03-27T19:54:09.033Z",
+  "updatedAt": "2026-03-27T19:54:09.035Z",
+  "architecture": {
+    "pattern": "distributed-real-time",
+    "rosVersion": "ROS2 Humble",
+    "communication": "DDS / Pub-Sub",
+    "os": "Ubuntu 22.04 / QNX",
+    "realtime": true,
+    "safetyLevel": "ASIL-D"
+  },
+  "modules": {
+    "perception": {
+      "name": "感知模块",
+      "name_en": "perception",
+      "path": "src/perception/",
+      "asil": "B",
+      "rt": true,
+      "latency": {
+        "target": "50ms",
+        "max": "100ms"
+      },
+      "dependencies": [
+        "sensor_drivers",
+        "hdmap"
+      ],
+      "dependents": [
+        "planning",
+        "prediction"
+      ],
+      "submodules": {
+        "lidar": {
+          "name": "激光雷达感知",
+          "asil": "B",
+          "files": []
+        },
+        "camera": {
+          "name": "视觉感知",
+          "asil": "B",
+          "files": []
+        },
+        "radar": {
+          "name": "毫米波雷达",
+          "asil": "B",
+          "files": []
+        },
+        "fusion": {
+          "name": "多传感器融合",
+          "asil": "C",
+          "files": []
+        },
+        "detection": {
+          "name": "目标检测",
+          "asil": "B",
+          "files": []
+        },
+        "tracking": {
+          "name": "目标跟踪",
+          "asil": "B",
+          "files": []
+        }
+      },
+      "risks": [
+        {
+          "type": "sensor_failure",
+          "severity": "critical",
+          "mitigation": "传感器冗余"
+        },
+        {
+          "type": "perception_latency",
+          "severity": "major",
+          "mitigation": "降低检测阈值"
+        }
+      ],
+      "techDebts": []
+    },
+    "localization": {
+      "name": "定位模块",
+      "name_en": "localization",
+      "path": "src/localization/",
+      "asil": "C",
+      "rt": true,
+      "latency": {
+        "target": "20ms",
+        "max": "50ms"
+      },
+      "dependencies": [
+        "sensor_drivers",
+        "hdmap"
+      ],
+      "dependents": [
+        "planning",
+        "control"
+      ],
+      "submodules": {
+        "gnss": {
+          "name": "GNSS定位",
+          "asil": "B",
+          "files": []
+        },
+        "imu": {
+          "name": "IMU惯导",
+          "asil": "B",
+          "files": []
+        },
+        "ekf": {
+          "name": "EKF融合定位",
+          "asil": "C",
+          "files": []
+        },
+        "lidar_loc": {
+          "name": "激光雷达定位",
+          "asil": "B",
+          "files": []
+        }
+      },
+      "risks": [
+        {
+          "type": "gnss_outage",
+          "severity": "critical",
+          "mitigation": "IMU航位推算"
+        },
+        {
+          "type": "map_mismatch",
+          "severity": "major",
+          "mitigation": "多源校验"
+        }
+      ],
+      "techDebts": []
+    },
+    "planning": {
+      "name": "决策规划模块",
+      "name_en": "planning",
+      "path": "src/planning/",
+      "asil": "D",
+      "rt": true,
+      "latency": {
+        "target": "100ms",
+        "max": "200ms"
+      },
+      "dependencies": [
+        "perception",
+        "localization",
+        "hdmap",
+        "prediction"
+      ],
+      "dependents": [
+        "control"
+      ],
+      "submodules": {
+        "behavior": {
+          "name": "行为决策",
+          "asil": "D",
+          "files": []
+        },
+        "trajectory": {
+          "name": "轨迹规划",
+          "asil": "D",
+          "files": []
+        },
+        "speed": {
+          "name": "速度规划",
+          "asil": "C",
+          "files": []
+        },
+        "routing": {
+          "name": "全局路径规划",
+          "asil": "C",
+          "files": []
+        },
+        "scenario": {
+          "name": "场景切换",
+          "asil": "D",
+          "files": []
+        }
+      },
+      "risks": [
+        {
+          "type": "planning_failure",
+          "severity": "critical",
+          "mitigation": "MRC最小风险条件"
+        },
+        {
+          "type": "inflexible",
+          "severity": "major",
+          "mitigation": "规则引擎升级"
+        }
+      ],
+      "techDebts": []
+    },
+    "prediction": {
+      "name": "轨迹预测模块",
+      "name_en": "prediction",
+      "path": "src/prediction/",
+      "asil": "B",
+      "rt": true,
+      "latency": {
+        "target": "30ms",
+        "max": "60ms"
+      },
+      "dependencies": [
+        "perception"
+      ],
+      "dependents": [
+        "planning"
+      ],
+      "submodules": {
+        "agent_model": {
+          "name": "Agent模型",
+          "asil": "B",
+          "files": []
+        },
+        "multi_agent": {
+          "name": "多Agent交互",
+          "asil": "B",
+          "files": []
+        },
+        "constraint": {
+          "name": "运动约束",
+          "asil": "B",
+          "files": []
+        }
+      },
+      "risks": [],
+      "techDebts": []
+    },
+    "control": {
+      "name": "车辆控制模块",
+      "name_en": "control",
+      "path": "src/control/",
+      "asil": "D",
+      "rt": true,
+      "latency": {
+        "target": "10ms",
+        "max": "20ms"
+      },
+      "dependencies": [
+        "planning",
+        "localization",
+        "vehicle"
+      ],
+      "dependents": [
+        "canbus"
+      ],
+      "submodules": {
+        "longitudinal": {
+          "name": "纵向控制",
+          "asil": "D",
+          "files": []
+        },
+        "lateral": {
+          "name": "横向控制",
+          "asil": "D",
+          "files": []
+        },
+        "lqr": {
+          "name": "LQR控制",
+          "asil": "C",
+          "files": []
+        },
+        "mpc": {
+          "name": "MPC模型预测控制",
+          "asil": "D",
+          "files": []
+        }
+      },
+      "risks": [
+        {
+          "type": "control_hz",
+          "severity": "critical",
+          "mitigation": "PID降级"
+        },
+        {
+          "type": "overshoot",
+          "severity": "major",
+          "mitigation": "限幅处理"
+        }
+      ],
+      "techDebts": []
+    },
+    "hdmap": {
+      "name": "高精地图模块",
+      "name_en": "hdmap",
+      "path": "src/hdmap/",
+      "asil": "C",
+      "rt": false,
+      "latency": {
+        "target": "N/A",
+        "max": "1s"
+      },
+      "dependencies": [],
+      "dependents": [
+        "perception",
+        "localization",
+        "planning",
+        "routing"
+      ],
+      "submodules": {
+        "base_map": {
+          "name": "基础地图",
+          "asil": "C",
+          "files": []
+        },
+        "localization_map": {
+          "name": "定位地图",
+          "asil": "B",
+          "files": []
+        },
+        "routing_map": {
+          "name": "路由地图",
+          "asil": "C",
+          "files": []
+        },
+        "semantic_map": {
+          "name": "语义地图",
+          "asil": "B",
+          "files": []
+        }
+      },
+      "risks": [],
+      "techDebts": []
+    },
+    "simulation": {
+      "name": "仿真测试模块",
+      "name_en": "simulation",
+      "path": "src/simulation/",
+      "asil": "N/A",
+      "rt": false,
+      "latency": {
+        "target": "N/A",
+        "max": "N/A"
+      },
+      "dependencies": [
+        "planning",
+        "control",
+        "perception"
+      ],
+      "dependents": [],
+      "submodules": {
+        "scenarios": {
+          "name": "测试场景库",
+          "asil": "N/A",
+          "files": []
+        },
+        "metrics": {
+          "name": "评测指标",
+          "asil": "N/A",
+          "files": []
+        },
+        "injector": {
+          "name": "故障注入",
+          "asil": "N/A",
+          "files": []
+        }
+      },
+      "risks": [],
+      "techDebts": []
+    },
+    "canbus": {
+      "name": "CAN/CANFD总线",
+      "name_en": "canbus",
+      "path": "src/canbus/",
+      "asil": "D",
+      "rt": true,
+      "latency": {
+        "target": "5ms",
+        "max": "10ms"
+      },
+      "dependencies": [
+        "control"
+      ],
+      "dependents": [
+        "vehicle"
+      ],
+      "submodules": {
+        "protocol": {
+          "name": "协议解析",
+          "asil": "D",
+          "files": []
+        },
+        "gateway": {
+          "name": "网关",
+          "asil": "C",
+          "files": []
+        }
+      },
+      "risks": [
+        {
+          "type": "bus_timeout",
+          "severity": "critical",
+          "mitigation": "超时监控"
+        }
+      ],
+      "techDebts": []
+    },
+    "safety": {
+      "name": "功能安全模块",
+      "name_en": "safety",
+      "path": "src/safety/",
+      "asil": "D",
+      "rt": true,
+      "latency": {
+        "target": "1ms",
+        "max": "5ms"
+      },
+      "dependencies": [
+        "perception",
+        "planning",
+        "control"
+      ],
+      "dependents": [],
+      "submodules": {
+        "monitor": {
+          "name": "系统监控",
+          "asil": "D",
+          "files": []
+        },
+        "watchdog": {
+          "name": "看门狗",
+          "asil": "D",
+          "files": []
+        },
+        "mrc": {
+          "name": "最小风险控制",
+          "asil": "D",
+          "files": []
+        },
+        "diagnostic": {
+          "name": "诊断模块",
+          "asil": "C",
+          "files": []
+        }
+      },
+      "risks": [],
+      "techDebts": []
+    },
+    "vehicle": {
+      "name": "车辆平台接口",
+      "name_en": "vehicle",
+      "path": "src/vehicle/",
+      "asil": "D",
+      "rt": true,
+      "latency": {
+        "target": "1ms",
+        "max": "5ms"
+      },
+      "dependencies": [
+        "canbus"
+      ],
+      "dependents": [],
+      "submodules": {
+        "chassis": {
+          "name": "底盘接口",
+          "asil": "D",
+          "files": []
+        },
+        "brake": {
+          "name": "制动接口",
+          "asil": "D",
+          "files": []
+        },
+        "throttle": {
+          "name": "油门接口",
+          "asil": "D",
+          "files": []
+        },
+        "steering": {
+          "name": "转向接口",
+          "asil": "D",
+          "files": []
+        }
+      },
+      "risks": [],
+      "techDebts": []
+    },
+    "monitor": {
+      "name": "系统监控",
+      "name_en": "monitor",
+      "path": "src/tools/",
+      "asil": "N/A",
+      "rt": false,
+      "latency": {
+        "target": "N/A",
+        "max": "N/A"
+      },
+      "dependencies": [
+        "all"
+      ],
+      "dependents": [],
+      "submodules": {
+        "logger": {
+          "name": "日志系统",
+          "asil": "N/A",
+          "files": []
+        },
+        "visualizer": {
+          "name": "可视化",
+          "asil": "N/A",
+          "files": []
+        },
+        "dumper": {
+          "name": "数据回放",
+          "asil": "N/A",
+          "files": []
+        }
+      },
+      "risks": [],
+      "techDebts": []
+    }
+  },
+  "stats": {
+    "totalModules": 11
+  },
+  "safety": {
+    "asilLevel": "D",
+    "standard": "ISO26262",
+    "watchdogs": [
+      {
+        "name": "Process Watchdog",
+        "period": "100ms",
+        "action": "restart"
+      },
+      {
+        "name": "Heartbeat Watchdog",
+        "period": "50ms",
+        "action": "MRC"
+      }
+    ],
+    "redundancies": [
+      {
+        "type": "sensor",
+        "items": [
+          "lidar_1",
+          "lidar_2",
+          "radar"
+        ]
+      },
+      {
+        "type": "computing",
+        "items": [
+          "primary_compute",
+          "backup_compute"
+        ]
+      }
+    ]
+  },
+  "perception": {
+    "sensors": [
+      {
+        "type": "lidar",
+        "model": "Velodyne VLS-128",
+        "count": 1,
+        "fps": 10
+      },
+      {
+        "type": "camera",
+        "model": "camera_fisheye",
+        "count": 8,
+        "fps": 30
+      },
+      {
+        "type": "radar",
+        "model": "continental_ars408",
+        "count": 2,
+        "fps": 20
+      },
+      {
+        "type": "ultrasonic",
+        "count": 12,
+        "fps": 40
+      }
+    ],
+    "models": [
+      {
+        "name": "障碍物检测",
+        "type": "detection",
+        "framework": "PointPillars",
+        "latency": "40ms"
+      },
+      {
+        "name": "车道线检测",
+        "type": "laneline",
+        "framework": "SCNN",
+        "latency": "30ms"
+      },
+      {
+        "name": "目标跟踪",
+        "type": "tracking",
+        "framework": "AB3DMOT",
+        "latency": "20ms"
+      },
+      {
+        "name": "融合感知",
+        "type": "fusion",
+        "framework": "CenterFusion",
+        "latency": "50ms"
+      }
+    ],
+    "latency": {
+      "target": "50ms",
+      "max": "100ms"
+    }
+  },
+  "planning": {
+    "algorithms": [
+      {
+        "name": "行为决策",
+        "type": "behavior",
+        "framework": "Rule-based + ML",
+        "latency": "20ms"
+      },
+      {
+        "name": "轨迹规划",
+        "type": "trajectory",
+        "framework": "QP + Spiral",
+        "latency": "50ms"
+      },
+      {
+        "name": "速度规划",
+        "type": "speed",
+        "framework": "DP +QP",
+        "latency": "30ms"
+      }
+    ],
+    "scenarios": [
+      "高速巡航",
+      "城区巡航",
+      "变道",
+      "汇入汇出",
+      "紧急制动",
+      "十字路口"
+    ],
+    "latency": {
+      "target": "100ms",
+      "max": "200ms"
+    },
+    "fallback": "MRC (Minimal Risk Condition)"
+  },
+  "simulation": {
+    "frameworks": [
+      "CARLA",
+      "LGSVL",
+      "Apollo Simulation"
+    ],
+    "scenarioCount": 1500,
+    "metrics": [
+      "L4-safe",
+      "Comfort",
+      "Efficiency",
+      "Success-Rate"
+    ]
+  }
+}

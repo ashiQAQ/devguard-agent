@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: devguard-prod
+
+resources:
+  - ../../base
+
+patchesStrategicMerge:
+  - ingress-host.yaml
+  - resource-limits.yaml
+  - pdb.yaml
+
+configMapGenerator:
+  - name: devguard-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=WARN
+
+replicas:
+  - name: devguard-api
+    count: 5
+  - name: devguard-cpp-engine
+    count: 3
+  - name: devguard-frontend
+    count: 3

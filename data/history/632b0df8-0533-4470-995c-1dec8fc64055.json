@@ -1,0 +1,55 @@
+[
+  {
+    "id": "c69a087d-43ad-4319-97a5-7960a968bbf7",
+    "projectId": "632b0df8-0533-4470-995c-1dec8fc64055",
+    "projectName": "Apollo感知系统",
+    "prNumber": 777,
+    "prTitle": "feat: 新增AEB紧急制动系统",
+    "author": "driver",
+    "riskLevel": "critical",
+    "modules": [
+      "control",
+      "perception",
+      "safety"
+    ],
+    "timestamp": "2026-03-27T20:22:57.036Z"
+  },
+  {
+    "id": "7f125946-f98a-44ac-bf1f-0715de7305b8",
+    "projectId": "632b0df8-0533-4470-995c-1dec8fc64055",
+    "projectName": "Apollo感知系统",
+    "prNumber": 999,
+    "prTitle": "feat: AEB",
+    "author": "dev",
+    "riskLevel": "critical",
+    "modules": [
+      "control"
+    ],
+    "timestamp": "2026-03-27T20:22:35.690Z"
+  },
+  {
+    "id": "2c52aee4-9cea-45bf-b6f5-b98db1e7952f",
+    "projectId": "632b0df8-0533-4470-995c-1dec8fc64055",
+    "projectName": "Apollo感知系统",
+    "prNumber": 888,
+    "prTitle": "feat: AEB紧急制动",
+    "author": "dev",
+    "riskLevel": "critical",
+    "modules": [
+      "control",
+      "safety"
+    ],
+    "timestamp": "2026-03-27T20:22:05.005Z"
+  },
+  {
+    "id": "857541ed-9beb-442d-8b83-3f6f2325b56d",
+    "projectId": "632b0df8-0533-4470-995c-1dec8fc64055",
+    "projectName": "Apollo感知系统",
+    "prNumber": 999,
+    "prTitle": "Unknown PR",
+    "author": "",
+    "riskLevel": "low",
+    "modules": [],
+    "timestamp": "2026-03-27T20:19:22.896Z"
+  }
+]

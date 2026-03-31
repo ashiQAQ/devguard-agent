@@ -1,0 +1,271 @@
+// ============================================================
+// DevGuard gRPC Bridge — 核心 Proto 定义
+// 调车本 (x86) ↔ 域控 (ARM64) 双向通信
+// ============================================================
+
+syntax = "proto3";
+
+package devguard;
+
+option cc_generic_services = false;
+
+// ── 公共类型 ──────────────────────────────────────────────────────────────────
+
+// 版本信息
+message VersionInfo {
+  string module_id    = 1;  // 模块 ID，如 "speed_controller"
+  string version      = 2;  // 语义版本，如 "1.2.3"
+  string git_hash     = 3;  // Git commit hash
+  string build_time   = 4;  // 构建时间 ISO8601
+  string build_host   = 5;  // 构建机器
+  string target_arch  = 6;  // 目标架构，如 "aarch64"
+  string asil_level   = 7;  // ASIL 等级
+  repeated string req_ids = 8;  // 关联的需求 ID 列表
+}
+
+// 符号条件
+message SymbolicCondition {
+  string variable  = 1;
+  string operator  = 2;  // "=", "!=", ">", "<", ">=", "<="
+  string value     = 3;  // 字符串化的值
+  string unit      = 4;
+  string raw       = 5;  // 原始文本
+}
+
+// 需求条目
+message Requirement {
+  string req_id       = 1;
+  string title        = 2;
+  string content      = 3;
+  string req_type     = 4;  // BUSINESS / TECHNICAL / SYMBOLIC
+  string priority     = 5;  // P0 / P1 / P2
+  string module       = 6;
+  string asil         = 7;
+  string phase        = 8;  // 技术需求时段
+  repeated SymbolicCondition conditions = 9;
+  string format       = 10; // markdown / json / yaml
+}
+
+// 校验结果
+message ValidationResult {
+  string variable   = 1;
+  string level      = 2;  // PASS / WARNING / ERROR
+  string message    = 3;
+  string suggestion = 4;
+  string actual     = 5;  // 实际值（运行时校验时）
+  string expected   = 6;  // 期望值
+}
+
+// 信号快照
+message SignalSnapshot {
+  string   name         = 1;
+  double   phys_value   = 2;
+  string   unit         = 3;
+  uint64   timestamp_us = 4;
+  bool     valid        = 5;
+  uint32   can_id       = 6;
+}
+
+// 违规事件
+message ViolationEvent {
+  string req_id         = 1;
+  string variable       = 2;
+  string condition_raw  = 3;
+  string actual_value   = 4;
+  string expected_value = 5;
+  string severity       = 6;  // INFO / WARNING / CRITICAL
+  uint64 timestamp_us   = 7;
+  string message        = 8;
+  string ecu_id         = 9;  // 来源域控 ID
+}
+
+// 域控健康状态
+message EcuHealth {
+  string   ecu_id         = 1;
+  string   ecu_type       = 2;  // ADCU / MDC / Orin / ...
+  string   ip_address     = 3;
+  string   os_version     = 4;
+  float    cpu_usage_pct  = 5;
+  float    mem_usage_mb   = 6;
+  float    temp_celsius   = 7;
+  uint64   uptime_sec     = 8;
+  string   status         = 9;  // ONLINE / DEGRADED / OFFLINE
+  uint64   timestamp_us   = 10;
+}
+
+// ── 请求/响应 ─────────────────────────────────────────────────────────────────
+
+// 推送需求文档
+message PushRequirementsRequest {
+  string session_id          = 1;  // 调车会话 ID
+  string operator_id         = 2;  // 操作员 ID
+  repeated Requirement reqs  = 3;
+  bool   force_update        = 4;  // 强制覆盖已有需求
+}
+
+message PushRequirementsResponse {
+  bool   success             = 1;
+  int32  accepted_count      = 2;
+  int32  rejected_count      = 3;
+  repeated string errors     = 4;
+  string session_id          = 5;
+}
+
+// 推送版本信息
+message PushVersionRequest {
+  string session_id          = 1;
+  string operator_id         = 2;
+  repeated VersionInfo versions = 3;
+}
+
+message PushVersionResponse {
+  bool   success             = 1;
+  repeated string errors     = 2;
+  // 版本与需求的对齐结果
+  repeated VersionAlignResult align_results = 3;
+}
+
+// 版本与需求对齐结果
+message VersionAlignResult {
+  string module_id           = 1;
+  string version             = 2;
+  repeated string covered_reqs   = 3;  // 已覆盖的需求
+  repeated string missing_reqs   = 4;  // 未覆盖的需求
+  repeated string extra_reqs     = 5;  // 声明但不存在的需求
+  float  coverage_rate       = 6;  // 覆盖率 0.0-1.0
+  string verdict             = 7;  // PASS / WARNING / FAIL
+}
+
+// 触发运行时校验
+message ValidateRequest {
+  string session_id          = 1;
+  repeated string req_ids    = 2;  // 空=校验所有
+  bool   include_signals     = 3;  // 是否包含当前信号快照
+  int32  timeout_ms          = 4;  // 超时（0=不超时）
+}
+
+message ValidateResponse {
+  string session_id          = 1;
+  bool   all_passed          = 2;
+  int32  error_count         = 3;
+  int32  warning_count       = 4;
+  repeated ValidationResult results = 5;
+  repeated SignalSnapshot    signals = 6;  // 校验时的信号快照
+  uint64 timestamp_us        = 7;
+}
+
+// 查询版本状态
+message GetVersionStatusRequest {
+  string session_id          = 1;
+  repeated string module_ids = 2;  // 空=查询所有
+}
+
+message GetVersionStatusResponse {
+  string session_id          = 1;
+  repeated VersionInfo versions = 2;
+  repeated VersionAlignResult align_results = 3;
+  EcuHealth health           = 4;
+}
+
+// 信号流订阅
+message SubscribeSignalsRequest {
+  string session_id          = 1;
+  repeated string variables  = 2;  // 空=订阅所有
+  int32  interval_ms         = 3;  // 推送间隔（0=有变化就推）
+}
+
+// 违规事件订阅
+message SubscribeViolationsRequest {
+  string session_id          = 1;
+  repeated string req_ids    = 2;  // 空=订阅所有
+  string min_severity        = 3;  // INFO / WARNING / CRITICAL
+}
+
+// 部署命令（调车本→域控）
+message DeployRequest {
+  string session_id          = 1;
+  string operator_id         = 2;
+  string module_id           = 3;
+  bytes  binary_data         = 4;  // 二进制文件内容
+  string target_path         = 5;  // 域控上的目标路径
+  string checksum_sha256     = 6;
+  bool   restart_after       = 7;  // 部署后重启模块
+}
+
+message DeployResponse {
+  bool   success             = 1;
+  string message             = 2;
+  string deployed_version    = 3;
+}
+
+// 调试命令
+message DebugCommandRequest {
+  string session_id          = 1;
+  string command             = 2;  // "start" / "stop" / "restart" / "log"
+  string module_id           = 3;
+  string args                = 4;  // JSON 参数
+}
+
+message DebugCommandResponse {
+  bool   success             = 1;
+  string output              = 2;
+  int32  exit_code           = 3;
+}
+
+// ── gRPC 服务定义 ─────────────────────────────────────────────────────────────
+
+// 域控端服务（运行在域控上，调车本调用）
+service EcuAgentService {
+  // ── 需求管理 ──────────────────────────────────────────────────────────────
+
+  // 推送需求文档到域控
+  rpc PushRequirements(PushRequirementsRequest)
+      returns (PushRequirementsResponse);
+
+  // 推送版本信息，触发版本↔需求对齐校验
+  rpc PushVersion(PushVersionRequest)
+      returns (PushVersionResponse);
+
+  // 触发运行时需求校验（用当前 CAN 信号值）
+  rpc Validate(ValidateRequest)
+      returns (ValidateResponse);
+
+  // 查询版本状态与需求覆盖情况
+  rpc GetVersionStatus(GetVersionStatusRequest)
+      returns (GetVersionStatusResponse);
+
+  // ── 实时数据流 ────────────────────────────────────────────────────────────
+
+  // 订阅 CAN 信号实时流（服务端流式）
+  rpc SubscribeSignals(SubscribeSignalsRequest)
+      returns (stream SignalSnapshot);
+
+  // 订阅需求违规事件流（服务端流式）
+  rpc SubscribeViolations(SubscribeViolationsRequest)
+      returns (stream ViolationEvent);
+
+  // 订阅域控健康状态流（服务端流式）
+  rpc SubscribeHealth(SubscribeSignalsRequest)
+      returns (stream EcuHealth);
+
+  // ── 部署与调试 ────────────────────────────────────────────────────────────
+
+  // 部署二进制到域控
+  rpc Deploy(DeployRequest)
+      returns (DeployResponse);
+
+  // 执行调试命令
+  rpc DebugCommand(DebugCommandRequest)
+      returns (DebugCommandResponse);
+}
+
+// 调车本服务（运行在 PC 上，域控主动上报时调用）
+service PcBridgeService {
+  // 域控主动上报违规事件
+  rpc ReportViolation(ViolationEvent)
+      returns (google.protobuf.Empty);
+
+  // 域控主动上报健康状态
+  rpc ReportHealth(EcuHealth)
+      returns (google.protobuf.Empty);
+}

@@ -1,0 +1,72 @@
+{
+  "version": "2.1",
+  "createdAt": "2026-03-27T20:10:20.406Z",
+  "ai": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "temperature": 0.2
+  },
+  "projects": [
+    {
+      "id": "632b0df8-0533-4470-995c-1dec8fc64055",
+      "name": "Apollo感知系统",
+      "type": "github",
+      "url": "https://github.com/ApolloAuto/apollo",
+      "branch": "main",
+      "token": "ghp_demo",
+      "webhookSecret": "dc5773f2-2314-46",
+      "language": "cpp",
+      "autoAnalyzers": [
+        "align",
+        "review"
+      ],
+      "enabled": true,
+      "createdAt": "2026-03-27T20:10:31.714Z",
+      "lastTrigger": "2026-03-27T20:22:50.690Z",
+      "baselineId": "d0390a44-a964-4031-befe-f987bb90f3a3"
+    },
+    {
+      "id": "8ad782ac-9d65-4868-8270-99a3d76ac178",
+      "name": "Apollo控制模块",
+      "type": "github",
+      "url": "https://github.com/ApolloAuto/apollo",
+      "branch": "main",
+      "token": "ghp_test",
+      "webhookSecret": "1ed3a8ba-0211-42",
+      "language": "cpp",
+      "autoAnalyzers": [
+        "align",
+        "review"
+      ],
+      "enabled": true,
+      "createdAt": "2026-03-27T20:15:54.088Z",
+      "lastTrigger": null,
+      "baselineId": null
+    }
+  ],
+  "triggers": {
+    "onPRCreate": true,
+    "onPRUpdate": true,
+    "onCommit": false,
+    "onSchedule": false,
+    "scheduleCron": "0 2 * * *"
+  },
+  "pipeline": {
+    "autoBaseline": true,
+    "autoAlign": true,
+    "autoReview": true,
+    "autoTest": false,
+    "autoComment": true,
+    "autoAssign": false
+  },
+  "notifications": {
+    "slack": null,
+    "webhook": null,
+    "notifyOnCritical": true,
+    "notifyOnAll": false
+  },
+  "baseline": {
+    "autoUpdate": true,
+    "updateThreshold": 10
+  }
+}

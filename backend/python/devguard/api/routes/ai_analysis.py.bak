@@ -1,0 +1,367 @@
+"""
+AI 需求分析 API 路由
+"""
+
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+import logging
+import os
+
+from devguard.analysis.ai_analyzer import (
+    RequirementAnalyzer,
+    RequirementAnalysisPipeline,
+    OpenAIProvider,
+    MockAIProvider,
+    AIProvider,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# 全局分析器实例
+_analyzer: Optional[RequirementAnalyzer] = None
+_pipeline: Optional[RequirementAnalysisPipeline] = None
+
+
+def get_analyzer() -> RequirementAnalyzer:
+    """获取分析器实例"""
+    global _analyzer
+    if _analyzer is None:
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if api_key:
+            provider = OpenAIProvider(api_key=api_key)
+        else:
+            provider = MockAIProvider()
+        _analyzer = RequirementAnalyzer(provider)
+    return _analyzer
+
+
+def get_pipeline() -> RequirementAnalysisPipeline:
+    """获取流水线实例"""
+    global _pipeline
+    if _pipeline is None:
+        _pipeline = RequirementAnalysisPipeline()
+    return _pipeline
+
+
+# ============================================================
+# 请求/响应模型
+# ============================================================
+
+class AnalyzeRequirementRequest(BaseModel):
+    """分析需求请求"""
+    requirement_id: str
+    content: str
+    format: str = "markdown"
+    code_context: Optional[List[Dict[str, Any]]] = None
+
+
+class ExtractFeaturesRequest(BaseModel):
+    """提取功能点请求"""
+    content: str
+    format: str = "markdown"
+
+
+class AnalyzeRisksRequest(BaseModel):
+    """风险分析请求"""
+    requirement_id: str
+    content: str
+
+
+class CodeSuggestionRequest(BaseModel):
+    """代码建议请求"""
+    requirement: str
+    language: str = "cpp"
+
+
+class SemanticSimilarityRequest(BaseModel):
+    """语义相似度请求"""
+    text1: str
+    text2: str
+
+
+class BatchAnalyzeRequest(BaseModel):
+    """批量分析请求"""
+    requirements: List[Dict[str, str]]
+
+
+# ============================================================
+# API 路由
+# ============================================================
+
+@router.post("/analyze")
+async def analyze_requirement(req: AnalyzeRequirementRequest):
+    """
+    完整需求分析
+    
+    执行流程:
+    1. 功能点提取
+    2. 风险分析
+    3. 需求洞察
+    4. 代码建议
+    5. 功能点对齐（如有代码上下文）
+    """
+    logger.info(f"分析需求: {req.requirement_id}")
+    
+    try:
+        pipeline = get_pipeline()
+        result = await pipeline.analyze(
+            requirement_id=req.requirement_id,
+            requirement_content=req.content,
+            format=req.format,
+            code_context=req.code_context,
+        )
+        
+        return {
+            "status": "success",
+            "data": result,
+        }
+    
+    except Exception as e:
+        logger.error(f"分析失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/extract-features")
+async def extract_features(req: ExtractFeaturesRequest):
+    """
+    提取功能点
+    
+    从需求文档中提取所有功能点，包括:
+    - 功能名称、描述
+    - 类型（业务/技术）
+    - 优先级
+    - 关键词
+    - 验收标准
+    - 约束条件
+    - ASIL 推断
+    """
+    logger.info("提取功能点")
+    
+    try:
+        analyzer = get_analyzer()
+        features = await analyzer.extract_features(req.content)
+        
+        return {
+            "status": "success",
+            "feature_count": len(features),
+            "features": [f.to_dict() for f in features],
+        }
+    
+    except Exception as e:
+        logger.error(f"功能点提取失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze-risks")
+async def analyze_risks(req: AnalyzeRisksRequest):
+    """
+    风险分析
+    
+    分析需求中的潜在风险:
+    - 技术风险
+    - 安全风险
+    - 性能风险
+    - 集成风险
+    """
+    logger.info(f"风险分析: {req.requirement_id}")
+    
+    try:
+        analyzer = get_analyzer()
+        result = await analyzer.analyze_risks(req.requirement_id, req.content)
+        
+        return {
+            "status": "success",
+            "requirement_id": req.requirement_id,
+            "risks": result.get("risks", []),
+            "missing_info": result.get("missing_info", []),
+            "questions": result.get("questions", []),
+        }
+    
+    except Exception as e:
+        logger.error(f"风险分析失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/code-suggestions")
+async def get_code_suggestions(req: CodeSuggestionRequest):
+    """
+    生成代码建议
+    
+    基于需求生成:
+    - 建议的类结构
+    - 接口定义
+    - 关键算法
+    - 测试用例
+    """
+    logger.info("生成代码建议")
+    
+    try:
+        analyzer = get_analyzer()
+        result = await analyzer.generate_code_suggestions(req.requirement)
+        
+        return {
+            "status": "success",
+            "language": req.language,
+            "suggestions": result,
+        }
+    
+    except Exception as e:
+        logger.error(f"代码建议生成失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/similarity")
+async def compute_similarity(req: SemanticSimilarityRequest):
+    """
+    计算语义相似度
+    
+    使用向量嵌入计算两段文本的语义相似度 (0-1)
+    """
+    try:
+        analyzer = get_analyzer()
+        similarity = await analyzer.compute_semantic_similarity(
+            req.text1, req.text2
+        )
+        
+        return {
+            "status": "success",
+            "similarity": similarity,
+            "interpretation": (
+                "高度相似" if similarity >= 0.85 else
+                "部分相似" if similarity >= 0.65 else
+                "语义相关" if similarity >= 0.45 else
+                "无明显关联"
+            ),
+        }
+    
+    except Exception as e:
+        logger.error(f"相似度计算失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/insight")
+async def generate_insight(req: ExtractFeaturesRequest):
+    """
+    生成需求洞察
+    
+    包括:
+    - 需求概述
+    - 关键实体
+    - 动作动词
+    - 质量属性
+    - 潜在风险
+    - 缺失信息
+    - 改进建议
+    - 测试场景
+    """
+    try:
+        analyzer = get_analyzer()
+        insight = await analyzer.generate_insight(req.content)
+        
+        return {
+            "status": "success",
+            "insight": {
+                "summary": insight.summary,
+                "key_entities": insight.key_entities,
+                "action_verbs": insight.action_verbs,
+                "quality_attributes": insight.quality_attributes,
+                "potential_risks": insight.potential_risks,
+                "missing_info": insight.missing_info,
+                "suggestions": insight.suggestions,
+                "test_scenarios": insight.test_scenarios,
+            },
+        }
+    
+    except Exception as e:
+        logger.error(f"洞察生成失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/batch")
+async def batch_analyze(req: BatchAnalyzeRequest, background_tasks: BackgroundTasks):
+    """
+    批量分析需求（后台执行）
+    
+    返回任务 ID，可通过 /status/{task_id} 查询进度
+    """
+    import uuid
+    task_id = str(uuid.uuid4())
+    
+    # TODO: 存储任务状态到数据库/Redis
+    
+    # 后台执行
+    async def run_batch():
+        try:
+            pipeline = get_pipeline()
+            results = []
+            for r in req.requirements:
+                result = await pipeline.analyze(
+                    r.get("id", ""),
+                    r.get("content", "")
+                )
+                results.append(result)
+            # TODO: 存储结果
+        except Exception as e:
+            logger.error(f"批量分析失败: {e}")
+    
+    background_tasks.add_task(run_batch)
+    
+    return {
+        "status": "accepted",
+        "task_id": task_id,
+        "total": len(req.requirements),
+        "message": "批量分析任务已启动",
+    }
+
+
+@router.get("/status/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    查询分析任务状态
+    """
+    # TODO: 从数据库/Redis 查询
+    return {
+        "task_id": task_id,
+        "status": "running",
+        "progress": 0,
+        "results": None,
+    }
+
+
+@router.get("/models")
+async def list_available_models():
+    """
+    列出可用的 AI 模型
+    """
+    models = []
+    
+    # 检查 OpenAI
+    if os.getenv("OPENAI_API_KEY"):
+        models.append({
+            "provider": "openai",
+            "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
+            "status": "available",
+        })
+    
+    # 检查 Azure OpenAI
+    if os.getenv("AZURE_OPENAI_KEY"):
+        models.append({
+            "provider": "azure",
+            "model": os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
+            "status": "available",
+        })
+    
+    # 添加 Mock
+    models.append({
+        "provider": "mock",
+        "model": "mock-model",
+        "status": "available",
+    })
+    
+    return {
+        "status": "success",
+        "models": models,
+    }

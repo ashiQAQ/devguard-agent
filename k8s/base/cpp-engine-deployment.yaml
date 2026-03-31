@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devguard-cpp-engine
+  namespace: devguard
+  labels:
+    app: devguard-cpp-engine
+    component: cpp-engine
+    version: "2.4.0"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: devguard-cpp-engine
+      component: cpp-engine
+  template:
+    metadata:
+      labels:
+        app: devguard-cpp-engine
+        component: cpp-engine
+        version: "2.4.0"
+    spec:
+      serviceAccountName: devguard
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: cpp-engine
+          image: devguard/cpp-engine:2.4.0
+          imagePullPolicy: Always
+          ports:
+            - name: grpc
+              containerPort: 9000
+              protocol: TCP
+          env:
+            - name: CPP_ENGINE_PORT
+              value: "9000"
+            - name: CPP_ENGINE_HOST
+              value: "0.0.0.0"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "1000m"
+            limits:
+              memory: "4Gi"
+              cpu: "4000m"
+          livenessProbe:
+            grpc:
+              port: grpc
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            grpc:
+              port: grpc
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: devguard-cpp-data
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - devguard-cpp-engine
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devguard-cpp-engine
+  namespace: devguard
+  labels:
+    app: devguard-cpp-engine
+    component: cpp-engine
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9000
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    app: devguard-cpp-engine
+    component: cpp-engine
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: devguard-cpp-engine
+  namespace: devguard
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: devguard-cpp-engine
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70

@@ -1,0 +1,32 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: devguard-api-pdb
+  namespace: devguard-prod
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: devguard-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: devguard-cpp-engine-pdb
+  namespace: devguard-prod
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: devguard-cpp-engine
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: devguard-frontend-pdb
+  namespace: devguard-prod
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: devguard-frontend

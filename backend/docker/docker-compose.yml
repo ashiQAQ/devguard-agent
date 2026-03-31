@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Python API 服务
+  api:
+    build:
+      context: ../..
+      dockerfile: backend/docker/Dockerfile.python
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://devguard:devguard@postgres:5432/devguard
+      - REDIS_URL=redis://redis:6379/0
+      - CPP_ENGINE_HOST=cpp-engine
+      - CPP_ENGINE_PORT=9000
+    depends_on:
+      - postgres
+      - redis
+      - cpp-engine
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  # C++ 高性能引擎
+  cpp-engine:
+    build:
+      context: ../..
+      dockerfile: backend/docker/Dockerfile.cpp
+    ports:
+      - "9000:9000"
+    volumes:
+      - /tmp/devguard:/tmp/devguard
+      - ./data/scenarios:/data/scenarios  # 仿真场景数据
+    restart: unless-stopped
+
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_DB=devguard
+      - POSTGRES_USER=devguard
+      - POSTGRES_PASSWORD=devguard
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  # Redis 缓存 + 队列
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # 前端 (可选)
+  frontend:
+    build:
+      context: ../../frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
