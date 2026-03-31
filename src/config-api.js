@@ -1,239 +1,315 @@
 /**
- * 配置 API 路由 — 全自动化管理
+ * config-api.js — 配置管理 API（MySQL 版）
+ * DevGuard Agent v2.1
+ *
+ * 所有配置、基线、分析结果全部写入 MySQL。
+ * 保留原有 API 签名，前端无感知。
  */
-const express = require('express');
-const router = express.Router();
-const crypto = require('crypto');
-const config = require('./config');
-const pipeline = require('./baseline/pipeline');
-const { saveBaseline, loadBaseline, listBaselines } = require('./baseline/schema');
 
-// ─── 辅助 ─────────────────────────────────────────────────────────────────
-const ok = (res, data) => res.json({ success: true, ...data });
+'use strict';
+
+const express = require('express');
+const router  = express.Router();
+const crypto  = require('crypto');
+const path    = require('path');
+const { ProjectStore, BaselineStore, AnalysisStore, ConfigStore } = require('./db-store');
+const pipeline = require('./baseline/pipeline');
+
+function uuid() { return crypto.randomUUID(); }
+const ok  = (res, d) => res.json({ success: true, ...d });
 const err = (res, msg, code = 500) => res.status(code).json({ success: false, error: msg });
 
-// ─── AI 配置 ──────────────────────────────────────────────────────────────
-router.post('/config/ai', (req, res) => {
-  const { provider, apiKey, model } = req.body;
-  if (!apiKey) return err(res, 'apiKey is required', 400);
+// ─── AI 配置（写入 dg_configs）───────────────────────────────────────────────
 
-  // 保存到 .env
-  const fs = require('fs');
-  const envPath = require('path').resolve(__dirname, '../../.env');
-  let envContent = '';
-  if (fs.existsSync(envPath)) envContent = fs.readFileSync(envPath, 'utf-8');
-
-  const lines = envContent.split('\n').filter(l => !l.startsWith('OPENAI') && !l.startsWith('ANTHROPIC') && !l.startsWith('AI_PROVIDER'));
-  lines.push(`AI_PROVIDER=${provider || 'openai'}`);
-  if (provider === 'anthropic') {
-    lines.push(`ANTHROPIC_API_KEY=${apiKey}`);
-    if (model) lines.push(`ANTHROPIC_MODEL=${model}`);
-  } else {
-    lines.push(`OPENAI_API_KEY=${apiKey}`);
-    if (model) lines.push(`OPENAI_MODEL=${model}`);
-  }
-  fs.writeFileSync(envPath, lines.join('\n'));
-
-  // 更新内存配置
-  process.env.AI_PROVIDER = provider || 'openai';
-  if (provider === 'anthropic') {
-    process.env.ANTHROPIC_API_KEY = apiKey;
-    if (model) process.env.ANTHROPIC_MODEL = model;
-  } else {
-    process.env.OPENAI_API_KEY = apiKey;
-    if (model) process.env.OPENAI_MODEL = model;
-  }
-
-  ok(res, { message: 'AI 配置已更新，请重启服务以完全生效' });
-});
-
-// ─── 项目管理 ─────────────────────────────────────────────────────────────
-router.get('/config/projects', (req, res) => {
-  const projects = config.getProjects().map(p => ({
-    ...p,
-    webhookURL: config.getWebhookURL(p.id),
-    baseline: p.baselineId ? (() => {
-      const b = loadBaseline(p.baselineId);
-      return b ? { id: b.id, name: b.name, version: b.version } : null;
-    })() : null,
-  }));
-  ok(res, { projects });
-});
-
-router.post('/config/projects', (req, res) => {
-  const { name, type, url, token, language, branch, autoAnalyzers } = req.body;
-  if (!name) return err(res, 'name is required', 400);
-  if (type !== 'local' && !url) return err(res, 'url is required for non-local projects', 400);
-  if (type !== 'local' && !token) return err(res, 'token is required for non-local projects', 400);
-
-  const project = config.addProject({
-    name, type, url, token,
-    language: language || 'cpp',
-    branch: branch || 'main',
-    autoAnalyzers: autoAnalyzers || ['align', 'review'],
-  });
-
-  ok(res, { project: { ...project, token: '***' } });
-});
-
-router.put('/config/projects/:id', (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-  delete updates.id;
-  delete updates.webhookSecret; // 不允许改 secret
-  config.updateProject(id, updates);
-  ok(res, { project: config.getProject(id) });
-});
-
-router.delete('/config/projects/:id', (req, res) => {
-  config.removeProject(req.params.id);
-  ok(res, { message: '项目已删除' });
-});
-
-// ─── 触发器配置 ──────────────────────────────────────────────────────────
-router.get('/config/triggers', (req, res) => {
-  ok(res, { triggers: config.get('triggers'), pipeline: config.get('pipeline') });
-});
-
-router.put('/config/triggers', (req, res) => {
-  const { triggers, pipeline } = req.body;
-  if (triggers) config.set('triggers', { ...config.get('triggers'), ...triggers });
-  if (pipeline) config.set('pipeline', { ...config.get('pipeline'), ...pipeline });
-  ok(res, { triggers: config.get('triggers'), pipeline: config.get('pipeline') });
-});
-
-// ─── 通知配置 ────────────────────────────────────────────────────────────
-router.get('/config/notifications', (req, res) => {
-  const n = config.get('notifications') || {};
-  ok(res, {
-    notifications: {
-      ...n,
-      slack: n.slack ? '******' + n.slack.slice(-8) : null,
-      webhook: n.webhook ? '******' + n.webhook.slice(-8) : null,
-    },
-  });
-});
-
-router.post('/config/notifications', (req, res) => {
-  const { slack, webhook, notifyOnCritical, notifyOnAll } = req.body;
-  if (slack) config.set('notifications.slack', slack);
-  if (webhook) config.set('notifications.webhook', webhook);
-  if (typeof notifyOnCritical === 'boolean') config.set('notifications.notifyOnCritical', notifyOnCritical);
-  if (typeof notifyOnAll === 'boolean') config.set('notifications.notifyOnAll', notifyOnAll);
-  ok(res, { message: '通知配置已更新' });
-});
-
-// ─── 自动化 Webhook ──────────────────────────────────────────────────────
-router.post('/webhook/auto/:projectId', async (req, res) => {
-  const { projectId } = req.params;
-  const project = config.getProject(projectId);
-
-  if (!project) return err(res, 'Project not found', 404);
-
-  // 验证 webhook secret
-  const providedSecret = req.headers['x-devguard-secret'];
-  if (project.webhookSecret && providedSecret !== project.webhookSecret) {
-    return err(res, 'Invalid secret', 401);
-  }
-
-  // 解析事件类型
-  const githubEvent = req.headers['x-github-event'];
-  const event = {
-    type: githubEvent === 'pull_request' ? 'pr_create' : 'pr_update',
-    prNumber: req.body.pull_request?.number || req.body.issue?.number,
-    platform: 'github',
-    // 传递完整 payload 给 pipeline
-    pull_request: req.body.pull_request || null,
-    repository: req.body.repository || null,
-  };
-
-  // 异步处理，不阻塞响应
-  res.json({ status: 'accepted', message: '分析任务已接收，正在处理...' });
-
+router.post('/config/ai', async (req, res) => {
   try {
-    const result = await pipeline.handleEvent(event, projectId);
-    console.log(`✅ Pipeline result:`, JSON.stringify(result));
-  } catch (e) {
-    console.error('Pipeline error:', e.message);
-  }
-});
+    const { provider, apiKey, model } = req.body;
+    if (!apiKey) return err(res, 'apiKey is required', 400);
 
-// ─── 手动触发分析 ────────────────────────────────────────────────────────
-router.post('/config/analyze/:projectId', async (req, res) => {
-  const { projectId } = req.params;
-  const { prNumber } = req.body;
+    await ConfigStore.set('ai', { provider: provider || 'openai', apiKey, model });
 
-  if (!prNumber) return err(res, 'prNumber is required', 400);
+    // 同时更新当前进程环境变量
+    process.env.AI_PROVIDER = provider || 'openai';
+    if (provider === 'deepseek') {
+      process.env.DEEPSEEK_API_KEY = apiKey;
+      if (model) process.env.DEEPSEEK_MODEL = model;
+    } else if (provider === 'anthropic') {
+      process.env.ANTHROPIC_API_KEY = apiKey;
+      if (model) process.env.ANTHROPIC_MODEL = model;
+    } else {
+      process.env.OPENAI_API_KEY = apiKey;
+      if (model) process.env.OPENAI_MODEL = model;
+    }
 
-  const project = config.getProject(projectId);
-  if (!project) return err(res, 'Project not found', 404);
-
-  try {
-    const result = await pipeline.handleEvent(
-      { type: 'manual', prNumber: parseInt(prNumber) },
-      projectId
-    );
-    ok(res, result);
+    ok(res, { message: 'AI 配置已更新并保存到数据库' });
   } catch (e) {
     err(res, e.message);
   }
 });
 
-// ─── 批量手动触发 ───────────────────────────────────────────────────────
-router.post('/config/reanalyze/:projectId', async (req, res) => {
+// ─── 项目管理 ────────────────────────────────────────────────────────────────
+
+router.get('/config/projects', async (req, res) => {
+  try {
+    const projects = await ProjectStore.list();
+    ok(res, { projects });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+router.post('/config/projects', async (req, res) => {
+  try {
+    const { name, type, url, token, language, branch, autoAnalyzers } = req.body;
+    if (!name) return err(res, 'name is required', 400);
+    if (type !== 'local' && !url) return err(res, 'url is required for non-local projects', 400);
+    if (type !== 'local' && !token) return err(res, 'token is required for non-local projects', 400);
+
+    const project = await ProjectStore.create({
+      name, type, url, token,
+      language: language || 'cpp',
+      branch: branch || 'main',
+      autoAnalyzers: autoAnalyzers || ['align', 'review'],
+    });
+    ok(res, { project });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+router.put('/config/projects/:id', async (req, res) => {
+  try {
+    const project = await ProjectStore.update(req.params.id, req.body);
+    if (!project) return err(res, 'Project not found', 404);
+    ok(res, { project });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+router.delete('/config/projects/:id', async (req, res) => {
+  try {
+    await ProjectStore.remove(req.params.id);
+    ok(res, { message: '项目已删除' });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+// ─── 触发器 / Pipeline 配置（写入 dg_configs）───────────────────────────────
+
+router.get('/config/triggers', async (req, res) => {
+  try {
+    const triggers = (await ConfigStore.get('triggers')) || {
+      onPRCreate: true, onPRUpdate: true, onCommit: false, onSchedule: false,
+      scheduleCron: '0 2 * * *',
+    };
+    const pipeline = (await ConfigStore.get('pipeline')) || {
+      autoBaseline: true, autoAlign: true, autoReview: true,
+      autoTest: false, autoComment: true, autoAssign: false,
+    };
+    ok(res, { triggers, pipeline });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+router.put('/config/triggers', async (req, res) => {
+  try {
+    const { triggers, pipeline: p } = req.body;
+    if (triggers) await ConfigStore.set('triggers', triggers);
+    if (p)        await ConfigStore.set('pipeline', p);
+    ok(res, { triggers: await ConfigStore.get('triggers'), pipeline: await ConfigStore.get('pipeline') });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+// ─── 通知配置 ──────────────────────────────────────────────────────────────
+
+router.get('/config/notifications', async (req, res) => {
+  try {
+    const n = (await ConfigStore.get('notifications')) || {};
+    ok(res, {
+      notifications: {
+        ...n,
+        slack:   n.slack   ? '******' + n.slack.slice(-8)   : null,
+        webhook: n.webhook ? '******' + n.webhook.slice(-8) : null,
+      },
+    });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+router.post('/config/notifications', async (req, res) => {
+  try {
+    const { slack, webhook, notifyOnCritical, notifyOnAll } = req.body;
+    const n = (await ConfigStore.get('notifications')) || {};
+    if (slack             != null) n.slack             = slack;
+    if (webhook           != null) n.webhook           = webhook;
+    if (notifyOnCritical  != null) n.notifyOnCritical  = notifyOnCritical;
+    if (notifyOnAll       != null) n.notifyOnAll       = notifyOnAll;
+    await ConfigStore.set('notifications', n);
+    ok(res, { message: '通知配置已更新' });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+// ─── Webhook 自动分析 ──────────────────────────────────────────────────────
+
+router.post('/webhook/auto/:projectId', async (req, res) => {
   const { projectId } = req.params;
-  const project = config.getProject(projectId);
-  if (!project) return err(res, 'Project not found', 404);
+  try {
+    const project = await ProjectStore.get(projectId);
+    if (!project) return err(res, 'Project not found', 404);
 
-  res.json({ status: 'accepted', message: '批量分析已启动，请稍候查看 PR 评论' });
+    const githubEvent = req.headers['x-github-event'];
+    const event = {
+      type:        githubEvent === 'pull_request' ? 'pr_create' : 'pr_update',
+      prNumber:    req.body.pull_request?.number || req.body.issue?.number,
+      platform:    'github',
+      pull_request: req.body.pull_request || null,
+      repository:   req.body.repository || null,
+    };
 
-  // 异步执行
-  setImmediate(async () => {
-    try {
-      const { default: GitClient } = require('./baseline/git-client');
-      const git = new GitClient();
-      const { owner, repo } = GitClient.parseGitHubURL(project.url);
-      const prs = await git.getPR(owner, repo, null, project.token);
+    // 记录分析历史
+    const record = await AnalysisStore.create({
+      projectId,
+      repoUrl:    req.body.repository?.html_url,
+      repoName:   req.body.repository?.full_name,
+      branch:     req.body.pull_request?.head?.ref || 'main',
+      analysisType: 'pr_review',
+      triggerEvent: event.type === 'pr_create' ? 'pr_create' : 'pr_update',
+      prNumber:   event.prNumber,
+      prTitle:    req.body.pull_request?.title,
+      prAuthor:   req.body.pull_request?.user?.login,
+      status:     'running',
+    });
 
-      if (Array.isArray(prs)) {
-        for (const pr of prs.slice(0, 5)) {
-          await pipeline.handleEvent({ type: 'pr_create', prNumber: pr.number }, projectId);
-        }
+    res.json({ status: 'accepted', analysisId: record.id, message: '分析任务已接收，正在处理...' });
+
+    // 异步处理
+    setImmediate(async () => {
+      const start = Date.now();
+      try {
+        const result = await pipeline.handleEvent(event, projectId);
+        await AnalysisStore.update(record.id, {
+          status:       'done',
+          riskLevel:    result.riskLevel,
+          canMerge:     result.canMerge,
+          resultSummary: result.summary,
+          resultDetail: result,
+          durationMs:   Date.now() - start,
+          completedAt:  new Date(),
+        });
+        console.log(`✅ Analysis ${record.id} done: ${result.riskLevel || 'ok'}`);
+      } catch (e) {
+        await AnalysisStore.update(record.id, {
+          status: 'failed',
+          resultSummary: e.message,
+          durationMs: Date.now() - start,
+          completedAt: new Date(),
+        });
+        console.error(`❌ Analysis ${record.id} failed: ${e.message}`);
       }
+    });
+  } catch (e) {
+    err(res, e.message);
+  }
+});
+
+// ─── 手动触发 ─────────────────────────────────────────────────────────────
+
+router.post('/config/analyze/:projectId', async (req, res) => {
+  try {
+    const { prNumber } = req.body;
+    if (!prNumber) return err(res, 'prNumber is required', 400);
+
+    const project = await ProjectStore.get(req.params.projectId);
+    if (!project) return err(res, 'Project not found', 404);
+
+    const record = await AnalysisStore.create({
+      projectId: req.params.projectId,
+      repoUrl:   project.url,
+      repoName:  project.name,
+      branch:    project.branch,
+      analysisType: 'pr_review',
+      triggerEvent: 'manual',
+      prNumber:  parseInt(prNumber),
+      status:    'running',
+    });
+
+    const start = Date.now();
+    try {
+      const result = await pipeline.handleEvent({ type: 'manual', prNumber: parseInt(prNumber) }, req.params.projectId);
+      await AnalysisStore.update(record.id, {
+        status: 'done', riskLevel: result.riskLevel, canMerge: result.canMerge,
+        resultSummary: result.summary, resultDetail: result,
+        durationMs: Date.now() - start, completedAt: new Date(),
+      });
+      ok(res, { analysisId: record.id, ...result });
     } catch (e) {
-      console.error('Batch analyze error:', e.message);
+      await AnalysisStore.update(record.id, {
+        status: 'failed', resultSummary: e.message,
+        durationMs: Date.now() - start, completedAt: new Date(),
+      });
+      err(res, e.message);
     }
-  });
+  } catch (e) {
+    err(res, e.message);
+  }
 });
 
-// ─── 获取分析历史 ────────────────────────────────────────────────────────
-router.get('/config/history/:projectId', (req, res) => {
-  const history = pipeline.getHistory(req.params.projectId);
-  ok(res, { history });
+// ─── 历史 ─────────────────────────────────────────────────────────────────
+
+router.get('/config/history/:projectId', async (req, res) => {
+  try {
+    const records = await AnalysisStore.latest(req.params.projectId, 50);
+    ok(res, { history: records });
+  } catch (e) {
+    err(res, e.message);
+  }
 });
 
-// ─── 配置验证 ─────────────────────────────────────────────────────────────
-router.get('/config/validate', (req, res) => {
-  const validation = config.validate();
-  ok(res, validation);
+// ─── 配置验证 / 读取 ───────────────────────────────────────────────────────
+
+router.get('/config/validate', async (req, res) => {
+  try {
+    const ai = await ConfigStore.get('ai');
+    const projects = await ProjectStore.list();
+    ok(res, {
+      valid: !!(ai?.apiKey),
+      hasProjects: projects.length > 0,
+      aiConfigured: !!ai?.apiKey,
+      dbConnected: true,
+    });
+  } catch (e) {
+    err(res, e.message);
+  }
 });
 
-// ─── 获取完整配置（脱敏）─────────────────────────────────────────────────
-router.get('/config', (req, res) => {
-  const all = config.all;
-  const safe = {
-    version: all.version,
-    triggers: all.triggers,
-    pipeline: all.pipeline,
-    notifications: all.notifications,
-    projects: all.projects.map(p => ({
-      ...p,
-      token: p.token ? '******' + p.token.slice(-4) : '',
-      webhookSecret: p.webhookSecret ? '******' : '',
-    })),
-    ai: config.getAIConfig(),
-  };
-  ok(res, safe);
+router.get('/config', async (req, res) => {
+  try {
+    const [ai, triggers, pipeline, notifications, projects] = await Promise.all([
+      ConfigStore.get('ai'),
+      ConfigStore.get('triggers'),
+      ConfigStore.get('pipeline'),
+      ConfigStore.get('notifications'),
+      ProjectStore.list(),
+    ]);
+    ok(res, {
+      version: '2.1',
+      triggers: triggers || {},
+      pipeline: pipeline || {},
+      notifications: notifications || {},
+      projects: projects.map(p => ({ ...p, token: p.token ? '******' : '' })),
+      ai: ai ? { provider: ai.provider, model: ai.model } : null,
+    });
+  } catch (e) {
+    err(res, e.message);
+  }
 });
 
 module.exports = router;

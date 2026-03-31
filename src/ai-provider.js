@@ -8,10 +8,16 @@ class AIProvider {
     this.provider = process.env.AI_PROVIDER || 'openai';
     this.openaiKey = process.env.OPENAI_API_KEY || '';
     this.anthropicKey = process.env.ANTHROPIC_API_KEY || '';
+    this.deepseekKey = process.env.DEEPSEEK_API_KEY || '';
+    this.deepseekBaseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
     this.openaiModel = process.env.OPENAI_MODEL || 'gpt-4o';
     this.anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-opus-4-5';
+    this.deepseekModel = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 
-    const key = this.provider === 'anthropic' ? this.anthropicKey : this.openaiKey;
+    let key = '';
+    if (this.provider === 'anthropic') key = this.anthropicKey;
+    else if (this.provider === 'deepseek') key = this.deepseekKey;
+    else key = this.openaiKey;
     this.isDemo = !key || key.includes('your-key');
   }
 
@@ -22,11 +28,32 @@ class AIProvider {
     }
     try {
       if (this.provider === 'anthropic') return await this._anthropic(systemPrompt, userContent);
+      if (this.provider === 'deepseek') return await this._deepseek(systemPrompt, userContent);
       return await this._openai(systemPrompt, userContent);
     } catch (e) {
       console.error('AI error:', e.message);
       return null;
     }
+  }
+
+  async _deepseek(system, user) {
+    const url = `${this.deepseekBaseUrl}/chat/completions`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.deepseekKey}`,
+      },
+      body: JSON.stringify({
+        model: this.deepseekModel,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        temperature: 0.2,
+        max_tokens: 4096,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || r.statusText);
+    return d.choices?.[0]?.message?.content;
   }
 
   async _openai(system, user) {
