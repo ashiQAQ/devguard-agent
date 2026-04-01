@@ -110,7 +110,7 @@ const getDocStatusText = (s: string) => ({ draft: '草稿', review: '审核中',
 onMounted(async () => {
   await appStore.fetchRequirements()
   try {
-    const res = await fetch('http://localhost:8000/api/req-docs/docs?page_size=10')
+    const res = await fetch('/api/req-docs/docs?page_size=10')
     const data = await res.json()
     recentDocs.value = data.docs || []
   } catch (e) { console.error('加载文档失败', e) }
