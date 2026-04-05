@@ -93,6 +93,11 @@ class Requirement(Base):
     doc_id = Column(String(36), ForeignKey("requirement_docs.id"), nullable=True, index=True)
     seq_no = Column(Integer, default=0)             # 在文档中的顺序
     
+    # 需求链（用于版本比对）
+    prev_req_id = Column(String(36), nullable=True)  # 前一个需求条目的 id（创建时填入）
+    next_req_id = Column(String(36), nullable=True)  # 下一个需求条目 id（由后一个创建时填入）
+    created_seq = Column(Integer, default=0)         # 全局创建序号（自增）
+    
     # 基本信息
     title = Column(String(255), nullable=False)
     description = Column(Text)
@@ -117,6 +122,11 @@ class Requirement(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     confirmed_at = Column(DateTime)
+    
+    # 需求链（版本比对）
+    prev_req_id = Column(String(36), nullable=True)   # 前一个需求条目的 id
+    next_req_id = Column(String(36), nullable=True)    # 下一个需求条目 id（创建新需求时回填）
+    created_seq = Column(Integer, default=0)          # 全局创建序号（越大越新）
     
     # 关系
     doc = relationship("RequirementDoc", back_populates="requirements")

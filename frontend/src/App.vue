@@ -11,6 +11,9 @@
         <el-menu
           :default-active="activeMenu"
           class="el-menu-vertical"
+          background-color="transparent"
+          text-color="rgba(255,255,255,0.8)"
+          active-text-color="#ffffff"
           @select="handleMenuSelect"
         >
           <el-menu-item index="dashboard">
@@ -209,6 +212,27 @@ const handleCommand = (command: string) => {
 }
 
 .el-menu-vertical :deep(.is-active) {
+  color: white !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 子菜单展开区域：覆盖 Element Plus 默认白色背景 */
+.el-menu-vertical :deep(.el-menu--inline) {
+  background: transparent !important;
+}
+
+.el-menu-vertical :deep(.el-menu--inline .el-menu-item) {
+  color: rgba(255, 255, 255, 0.75) !important;
+  background: transparent !important;
+  padding-left: 50px !important;
+}
+
+.el-menu-vertical :deep(.el-menu--inline .el-menu-item:hover) {
+  color: white !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.el-menu-vertical :deep(.el-menu--inline .el-menu-item.is-active) {
   color: white !important;
   background: rgba(255, 255, 255, 0.2) !important;
 }

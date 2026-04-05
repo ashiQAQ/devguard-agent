@@ -46,10 +46,13 @@ class ApiClient {
     delete: (id: string) => this.client.delete(`/requirements/${id}`),
     analyze: (id: string) => this.client.post(`/requirements/${id}/analyze`),
     confirm: (id: string, data: any) => this.client.post(`/requirements/${id}/confirm`, data),
-    // 新增：强校验
+    // 强校验
     validate: (data: any) => this.client.post('/requirements/validate', data),
-    // 新增：解析符号条件
+    // 解析符号条件
     parseSymbolic: (data: any) => this.client.post('/requirements/parse-symbolic', data),
+    // 与前一条需求对比
+    diff: (reqId: string, prevReqId: string) =>
+      this.client.post('/requirements/diff', { req_id: reqId, prev_req_id: prevReqId }),
   }
 
   // 分析 API

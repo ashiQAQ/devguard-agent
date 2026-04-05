@@ -158,6 +158,17 @@ const handleSubmit = async () => {
     try {
       const result = await apiClient.requirements.create(formData)
       ElMessage.success('需求创建成功')
+      
+      // 提取返回数据（含 diff 和 is_newest），存入 sessionStorage 供列表页读取
+      if (result?.data) {
+        sessionStorage.setItem('__last_created_req__', JSON.stringify({
+          ...result.data,
+          is_newest: true,
+          diff: result.diff || null,
+          created_seq: Date.now(),
+        }))
+      }
+      
       await appStore.fetchRequirements()
       router.push('/requirements-list')
     } catch (error) {

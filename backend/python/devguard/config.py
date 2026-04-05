@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
     API_PREFIX: str = "/api"
     
-    # 数据库配置
+    # 数据库配置（MySQL）
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://devguard:devguard@localhost:5432/devguard"
+        "mysql+pymysql://root:Abc123456Abc123456@localhost:3306/devguard?charset=utf8mb4"
     )
     SQLALCHEMY_ECHO: bool = DEBUG
     

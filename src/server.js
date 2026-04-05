@@ -8,6 +8,8 @@ const cors = require('cors');
 const path = require('path');
 
 const agent = require('./modules/agent');
+const aiPipelineRouter = require('./ai-pipeline/api');
+const { handleGitLabWebhookAI } = require('./modules/webhook-ai');
 const { handleGitHubWebhook, handleGitLabWebhook, getWebhookHistory } = require('./modules/webhook');
 const baselineRouter = require('./baseline/api');
 const configRouter = require('./config-api');
@@ -72,12 +74,17 @@ app.use('/api/repos', featureRouter);
 // ── Config & Automation ────────────────────────────────────────────────────
 app.use('/api', configRouter);
 
+// ── AI Pipeline ─────────────────────────────────────────────────────────────
+app.use('/api/ai-pipeline', aiPipelineRouter);
+
 // ── Webhooks ────────────────────────────────────────────────────────────────
 app.get('/api/webhooks', (req, res) => {
   res.json({ success: true, history: getWebhookHistory() });
 });
 app.post('/webhook/github', handleGitHubWebhook);
 app.post('/webhook/gitlab', handleGitLabWebhook);
+// AI 增强版 GitLab Webhook（支持合并风险评估）
+app.post('/webhook/gitlab-ai', handleGitLabWebhookAI);
 
 // ── SPA ──────────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
