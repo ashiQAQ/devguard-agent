@@ -26,6 +26,7 @@
               <el-icon><DocumentCopy /></el-icon>
               <span>需求管理</span>
             </template>
+            <el-menu-item index="req-docs">需求文档</el-menu-item>
             <el-menu-item index="requirements-list">需求列表</el-menu-item>
             <el-menu-item index="requirements-create">创建需求</el-menu-item>
             <el-menu-item index="requirements-analysis">需求分析</el-menu-item>
@@ -127,6 +128,9 @@ const activeMenu = ref('dashboard')
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     dashboard: '仪表板',
+    'req-docs': '需求文档',
+    'req-docs-create': '创建文档',
+    'req-docs-edit': '编辑文档',
     'requirements-list': '需求列表',
     'requirements-create': '创建需求',
     'requirements-analysis': '需求分析',

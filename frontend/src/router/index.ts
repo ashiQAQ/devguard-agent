@@ -46,9 +46,18 @@ const routes: Array<RouteRecordRaw> = [
     meta: { title: '需求文档', requiresAuth: true },
   },
   {
-    path: '/req-docs/create',
+    path: '/req-docs-list',
+    redirect: '/req-docs',
+  },
+  {
+    path: '/req-docs-create',
     component: () => import('../views/req-docs/Create.vue'),
     meta: { title: '创建文档', requiresAuth: true },
+  },
+  {
+    path: '/req-docs-edit/:id',
+    component: () => import('../views/req-docs/Edit.vue'),
+    meta: { title: '编辑文档', requiresAuth: true },
   },
   {
     path: '/req-docs/:id',

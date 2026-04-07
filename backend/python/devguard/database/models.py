@@ -39,6 +39,12 @@ class RequirementDoc(Base):
     format = Column(String(20), default="markdown") # markdown / word / pdf
     version = Column(String(20), default="1.0.0")
     
+    # 版本管理
+    version_major = Column(Integer, default=1)       # 主版本号
+    version_minor = Column(Integer, default=0)      # 副版本号
+    version_note = Column(String(255), default="")  # 版本说明/更新日志
+    parent_doc_id = Column(String(36), nullable=True)  # 上一版本的文档 ID（用于版本链）
+    
     # 分类
     doc_type = Column(String(30), default="PRD")    # PRD / SRS / ICD / HLD / LLD
     project = Column(String(100))
